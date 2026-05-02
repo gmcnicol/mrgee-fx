@@ -1,34 +1,50 @@
 # mrgee-fx
 
-This repo is for exporting dedicated JUCE plugins from bundled JSFX projects, with `ysfx` providing the JSFX runtime and JUCE providing the product UI.
+Turn a JSFX script into the start of a dedicated JUCE VST3/AU plugin.
 
-It is not intended to ship a generic user-facing script runner.
+`mrgee-fx` is meant to be imported by another CMake project. You bring a `.jsfx` file, call one CMake function, and get a plugin target with:
 
-## Architecture
+- the JSFX script embedded in the plugin binary
+- optional JSFX companion files/directories bundled with it
+- stable JUCE parameters derived from JSFX sliders as `slider1`, `slider2`, ...
+- a generic JUCE editor generated from the slider metadata
+- `ysfx` runtime execution when enabled
+- VST3, AU, and Standalone targets by default
 
-- One plugin target per bundled JSFX project
-- The JSFX source is embedded into that target at build time
-- `ysfx` executes the bundled JSFX at runtime
-- JUCE owns the editor, parameter bindings, state, branding, and plugin packaging
+It is a bootstrap for product plugins, not a generic script-runner plugin.
 
-Today the repo ships one dedicated example target:
+## Quick Start
 
-- CMake target: `MrgeeSwitchableFilter`
-- Product name: `Mrgee Switchable Filter`
-- Bundled JSFX: `assets/jsfx/SwitchableFilter.jsfx`
+Create a new plugin repo with this shape:
 
-The intended v1 controls are:
+```text
+acme-tape-delay/
+  CMakeLists.txt
+  jsfx/
+    tape-delay.jsfx
+    lib/
+    Data/
+```
 
-- `Mode`
-- `Cutoff`
-- `Q`
-- `Slope`
-
-## Importable CMake API
-
-External projects can import this repo with `FetchContent` or `add_subdirectory` and create a plugin target with:
+Add a `CMakeLists.txt`:
 
 ```cmake
+cmake_minimum_required(VERSION 3.24)
+
+project(acme_tape_delay VERSION 0.1.0 LANGUAGES C CXX)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+include(FetchContent)
+
+FetchContent_Declare(
+    mrgee_fx
+    GIT_REPOSITORY https://github.com/gmcnicol/mrgee-fx.git
+    GIT_TAG main
+)
+
 FetchContent_MakeAvailable(mrgee_fx)
 
 mrgee_add_jsfx_plugin(
@@ -39,9 +55,77 @@ mrgee_add_jsfx_plugin(
     JSFX_ASSETS
         "${CMAKE_CURRENT_SOURCE_DIR}/jsfx/lib"
         "${CMAKE_CURRENT_SOURCE_DIR}/jsfx/Data"
-    NEEDS_MIDI_INPUT
 )
 ```
+
+Build it:
+
+```bash
+cmake -S . -B build -G Ninja -DMRGEE_USE_YSFX=ON
+cmake --build build
+```
+
+On macOS, the default formats produce artefacts under paths like:
+
+```text
+build/AcmeTapeDelay_artefacts/VST3/Acme Tape Delay.vst3
+build/AcmeTapeDelay_artefacts/AU/Acme Tape Delay.component
+build/AcmeTapeDelay_artefacts/Standalone/Acme Tape Delay.app
+```
+
+For multi-config generators such as Xcode, the configuration name appears in the artefact path.
+
+## Your JSFX File
+
+Slider declarations become plugin parameters. This JSFX:
+
+```js
+desc:Acme Tape Delay
+
+slider1:250<1,2000,1>Delay
+slider2:35<0,95,1>Feedback
+slider3:50<0,100,1>Mix
+
+@sample
+spl0 = spl0;
+spl1 = spl1;
+```
+
+creates stable parameter IDs:
+
+```text
+slider1
+slider2
+slider3
+```
+
+Those IDs are intentionally based on the JSFX slider layout, not display names. Rename display labels carefully, but treat slider order and numbering as the automation/state contract once a plugin has shipped.
+
+## Companion Assets
+
+Use `JSFX_ASSETS` for imports, helper scripts, samples, lookup tables, images, or data files needed by the JSFX project:
+
+```cmake
+mrgee_add_jsfx_plugin(
+    TARGET AcmeSampler
+    PRODUCT_NAME "Acme Sampler"
+    PLUGIN_CODE SmP1
+    JSFX_FILE "${CMAKE_CURRENT_SOURCE_DIR}/jsfx/sampler.jsfx"
+    JSFX_ASSETS
+        "${CMAKE_CURRENT_SOURCE_DIR}/jsfx/lib"
+        "${CMAKE_CURRENT_SOURCE_DIR}/jsfx/Data"
+)
+```
+
+At runtime, `mrgee-fx` writes the bundle into a target-specific temp directory:
+
+- the main script is written under `Effects/`
+- assets under a logical `Data/` path are written to sibling `Data/`
+- other assets are written under `Effects/` with relative paths preserved
+
+That layout matches normal JSFX import and data lookup expectations.
+
+## Plugin Metadata
 
 Required arguments:
 
@@ -50,199 +134,113 @@ Required arguments:
 - `PLUGIN_CODE`
 - `JSFX_FILE`
 
-Optional metadata arguments:
+Optional arguments:
 
-- `COMPANY_NAME` defaults to `Mrgee`
-- `PLUGIN_MANUFACTURER_CODE` defaults to `MrgE`
-- `FORMATS` defaults to `VST3 AU Standalone`
-- `JSFX_ASSETS` accepts files or directories to bundle beside the script at runtime
+- `COMPANY_NAME`, default `Mrgee`
+- `PLUGIN_MANUFACTURER_CODE`, default `MrgE`
+- `FORMATS`, default `VST3 AU Standalone`
+- `JSFX_ASSETS`, files or directories to bundle beside the script
 
-Per-target MIDI role is declared at the CMake call site rather than hidden in shared code. Optional flags are:
-
-- `NEEDS_MIDI_INPUT`
-- `NEEDS_MIDI_OUTPUT`
-- `IS_MIDI_EFFECT`
-- `IS_SYNTH`
-
-The helper:
-
-- embeds the JSFX script and optional companion assets for that plugin target
-- generates target-local JSFX bundle metadata
-- builds a dedicated JUCE plugin target
-- links `ysfx` when `MRGEE_USE_YSFX=ON`
-- lets each exported plugin declare whether it is an audio effect, MIDI effect, synth, or hybrid audio+MIDI processor
-
-Example:
+Example with explicit metadata:
 
 ```cmake
 mrgee_add_jsfx_plugin(
-    TARGET MrgeeMidiEcho
-    PRODUCT_NAME "Mrgee MIDI Echo"
+    TARGET AcmeFilter
+    PRODUCT_NAME "Acme Filter"
+    COMPANY_NAME "Acme Audio"
+    PLUGIN_MANUFACTURER_CODE Acme
+    PLUGIN_CODE FlT1
+    FORMATS VST3 AU
+    JSFX_FILE "${CMAKE_CURRENT_SOURCE_DIR}/jsfx/filter.jsfx"
+)
+```
+
+JUCE plugin codes are four-character identifiers. Pick stable values before distributing builds.
+
+## MIDI And Instruments
+
+Declare the plugin role at the CMake call site:
+
+```cmake
+mrgee_add_jsfx_plugin(
+    TARGET AcmeMidiEcho
+    PRODUCT_NAME "Acme MIDI Echo"
     PLUGIN_CODE MdE1
-    JSFX_FILE assets/jsfx/MidiEcho.jsfx
+    JSFX_FILE "${CMAKE_CURRENT_SOURCE_DIR}/jsfx/midi-echo.jsfx"
     NEEDS_MIDI_INPUT
     NEEDS_MIDI_OUTPUT
     IS_MIDI_EFFECT
 )
 ```
 
-When this repo is the top-level project, `MRGEE_BUILD_EXAMPLES` defaults to `ON` and builds the shipped example and smoke tools. When imported by another project, it defaults to `OFF`, leaving only the public `mrgee_add_jsfx_plugin(...)` function available unless explicitly enabled.
+Available role flags:
 
-At runtime, the bundled JSFX script is written under a target-specific temp `Effects/` directory. Assets whose logical path starts with `Data/` are written to the sibling `Data/` directory; other assets preserve their logical path under `Effects/`, which supports normal JSFX import and data lookup conventions.
+- `NEEDS_MIDI_INPUT`
+- `NEEDS_MIDI_OUTPUT`
+- `IS_MIDI_EFFECT`
+- `IS_SYNTH`
 
-## JUCE UI Workflow
+The runtime path forwards JUCE MIDI buffers into `ysfx`, receives MIDI output back from `ysfx`, and preserves event offsets inside each processing block.
 
-The intended split of responsibilities is:
+## Runtime Modes
 
-- JSFX defines DSP behavior and the raw slider model
-- `ysfx` executes the bundled JSFX and reports slider metadata
-- JUCE turns that metadata into a product UI
+Use the real runtime for plugin work:
 
-For a new plugin target, the practical UI flow should be:
+```bash
+cmake -S . -B build -G Ninja -DMRGEE_USE_YSFX=ON
+cmake --build build
+```
 
-1. Bundle one JSFX project into one plugin target.
-2. Read slider descriptors from the bundled script/runtime in `JsfxHost`.
-3. Create APVTS parameters from those descriptors in `PluginProcessor`.
-4. Decide which controls should stay generic and which should get custom treatment in the editor.
+Use the no-ysfx path only when you want to inspect the generated parameter/editor surface without executing audio:
 
-In this repo today:
+```bash
+cmake -S . -B build-no-ysfx -G Ninja -DMRGEE_USE_YSFX=OFF
+cmake --build build-no-ysfx
+```
 
-- enum sliders render as `ComboBox`
-- continuous sliders render as rotary `Slider`
-- parameter attachments are owned by the editor
-- status text comes from `JsfxHost`
+With `MRGEE_USE_YSFX=OFF`, slider metadata still becomes JUCE parameters, but audio bypasses.
 
-That is the baseline, not the final design ceiling.
+## What You Get First
 
-For production-quality per-plugin UI, the expected pattern is:
+The first generated plugin is deliberately plain:
 
-- keep the parameter IDs stable and derived from the bundled JSFX slider layout
-- keep DSP control ownership in the processor/APVTS layer
-- use JUCE components only as views over those parameters
-- replace generic controls selectively with branded components, grouped layouts, metering, response plots, or explanatory text
+- dynamic parameters from JSFX sliders
+- generic controls for enum and continuous sliders
+- APVTS state save/restore
+- bundled JSFX loading through `ysfx`
+- basic status text from the runtime
 
-In other words:
+That gets the DSP into a host quickly. From there, make it a real product:
 
-- `ysfx` should not dictate the final UI
-- the JSFX slider set is the control contract
-- JUCE is where the plugin becomes a product
+1. Lock the JSFX slider list and parameter IDs.
+2. Confirm the VST3/AU loads in your target hosts.
+3. Replace the generic editor with a plugin-specific JUCE UI.
+4. Add any metering, response plots, preset handling, and branded controls.
+5. Keep JUCE responsible for product UX; keep JSFX responsible for DSP behavior.
 
-Recommended implementation steps for a new plugin:
+## Import Behavior
 
-1. Get the bundled JSFX compiling and rendering correctly through `ysfx`.
-2. Lock the exported parameter list and IDs.
-3. Build a minimal dynamic editor to prove the surface.
-4. Replace the generic layout with a plugin-specific JUCE design once the parameter contract is stable.
+When `mrgee-fx` is imported by another project, examples and smoke tools are off by default. Only the public `mrgee_add_jsfx_plugin(...)` helper is exposed.
 
-Files to start from:
+When `mrgee-fx` is configured as the top-level project, `MRGEE_BUILD_EXAMPLES` defaults to `ON` and builds the included `MrgeeSwitchableFilter` example plus smoke tools.
 
-- [src/JsfxHost.cpp](/Users/gareth/src/mrgee-fx/src/JsfxHost.cpp)
-- [src/PluginProcessor.cpp](/Users/gareth/src/mrgee-fx/src/PluginProcessor.cpp)
-- [src/PluginEditor.cpp](/Users/gareth/src/mrgee-fx/src/PluginEditor.cpp)
+## Dependencies
 
-## UI Design Tooling
+This repo expects JUCE and ysfx to be available in one of these ways:
 
-There is no modern JUCE-first visual designer you should rely on for polished FX products.
+- already provided by the parent CMake project
+- present under `third_party/JUCE` and `third_party/ysfx` in this repo
+- JUCE fetched automatically when `MRGEE_FETCH_JUCE=ON`
 
-Recommended workflow:
-
-1. Mock the product UI in Figma, Penpot, or Sketch.
-2. Define the parameter contract from the bundled JSFX.
-3. Implement the real editor in JUCE `Component` code.
-4. Attach controls to APVTS parameters.
-5. Add custom drawing, metering, plots, and branded interaction on top.
-
-Practical guidance:
-
-- Use the current dynamic editor as a bootstrap only.
-- Move quickly from generic controls to plugin-specific components.
-- Build reusable JUCE widgets for knobs, switches, segmented selectors, meters, keyboards, step editors, and plots.
-- Keep layout and styling in JUCE, not in JSFX metadata.
-- Treat JSFX slider names and ranges as the control contract, not as the final visual design.
-
-For a “nice UI,” the code structure you usually want is:
-
-- `PluginProcessor`
-  owns parameter/state definition
-- `PluginEditor`
-  owns layout and composition
-- custom JUCE components
-  own the look/feel and interaction details
-
-That lets you ship a clean product UI without changing the underlying JSFX DSP contract.
-
-## MIDI Processing Considerations
-
-If you want to export custom MIDI JSFX as plugins other people can use, the main architectural points are:
-
-- The plugin target must declare the right MIDI capabilities in JUCE.
-- The host path must preserve MIDI input, MIDI output, and sample-accurate event offsets.
-- The UI should make event behavior obvious, especially for generators, arps, harmonizers, remappers, and channel tools.
-
-Important implementation considerations:
-
-- Decide whether the plugin is:
-  - MIDI effect only
-  - instrument with MIDI input
-  - audio effect that also transforms MIDI
-- Make the per-plugin JUCE flags in `mrgee_add_jsfx_plugin(...)` match that decision.
-- Translate between JUCE `MidiBuffer` events and the `ysfx` MIDI APIs consistently.
-- Preserve event timing offsets within the processing block.
-- Be explicit about pass-through behavior for notes, CC, pitch bend, aftertouch, transport, and panic/all-notes-off handling.
-- Test zero-output and dense-output cases, especially for generators and echo/repeater style effects.
-
-In the current runtime path:
-
-- incoming JUCE MIDI is forwarded into `ysfx` before block processing
-- outgoing `ysfx` MIDI is copied back into JUCE after block processing
-- sample offsets are preserved within the block rather than collapsed to block boundaries
-
-For product behavior, also decide:
-
-- whether incoming MIDI is transformed or passed through unchanged by default
-- whether generated MIDI is merged with input or replaces it
-- whether the effect depends on host tempo/transport
-- how state restore interacts with held notes or latched/sequenced patterns
-
-Verification you should expect for MIDI plugins:
-
-- note-in to note-out behavior
-- CC pass-through or transformation behavior
-- timing offset preservation inside a block
-- transport/tempo-dependent behavior
-- state round-trip without stuck-note regressions
-
-Licensing note for MIT-distributed JSFX projects:
-
-- MIT is a good fit for redistributing your own JSFX logic.
-- Keep the JSFX project license text in the repo and, if you want clean downstream reuse, include it alongside the bundled plugin source/assets too.
-- If a plugin bundles third-party JSFX or borrowed tables/data, verify those assets are also compatible with MIT redistribution.
-
-## Runtime Policy
-
-- `MRGEE_USE_YSFX=ON` is the real product path.
-  `ysfx` loads and runs the bundled JSFX, and JUCE surfaces the plugin UI and automation.
-- `MRGEE_USE_YSFX=OFF` is a degraded developer/build path.
-  The plugin still exposes the bundled metadata so the JUCE parameter/UI surface can be inspected, but audio bypasses.
-
-## Bootstrap
+For local development on this repo:
 
 ```bash
 ./scripts/bootstrap_deps.sh
 ```
 
-The repo expects:
+## Verifying This Repo
 
-- `third_party/JUCE`
-- `third_party/ysfx` with submodules initialized recursively
-
-This repo includes minimal local `third_party/ysfx` CMake fixes so it can be embedded as a subdirectory cleanly.
-
-## Verification
-
-Manual path:
-
-### `MRGEE_USE_YSFX=OFF`
+No-ysfx checks:
 
 ```bash
 cmake -S . -B build-check-off -G Ninja -DMRGEE_USE_YSFX=OFF
@@ -253,7 +251,7 @@ cmake -S tests/external_consumer -B build-external-consumer -G Ninja
 cmake --build build-external-consumer
 ```
 
-### `MRGEE_USE_YSFX=ON`
+ysfx-enabled checks:
 
 ```bash
 cmake -S . -B build-check-on -G Ninja -DMRGEE_USE_YSFX=ON
@@ -265,27 +263,8 @@ cmake --build build-check-on
   "./build-check-on/MrgeeSwitchableFilter_artefacts/RelWithDebInfo/VST3/Mrgee Switchable Filter.vst3"
 ```
 
-Shortcut:
+Or run:
 
 ```bash
 ./scripts/run_local_verification.sh
 ```
-
-Smoke targets:
-
-- `mrgee_jsfx_smoke`
-  Verifies the direct JUCE/processor/runtime surface for the dedicated plugin.
-- `mrgee_jsfx_asset_smoke`
-  Verifies JSFX companion assets are materialized under `Effects/` and sibling `Data/`.
-- `mrgee_midi_bridge_smoke`
-  Verifies JUCE-to-`ysfx` MIDI input/output bridging and per-block event offset preservation.
-- `mrgee_vst3_smoke`
-  Loads the built VST3 in a clean process and verifies parameter presence, audio behavior, and state restore.
-
-## Ralph Handoff
-
-- `TASKS.md` is the task board and execution log
-- `PROMPT.md` is the prompt handed to Codex
-- `scripts/run_ralph_handoff.sh` runs Codex non-interactively via `codex exec` with full-access flags
-
-If you resume work, start with `TASKS.md`.
