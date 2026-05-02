@@ -1,56 +1,75 @@
 #pragma once
 
-#include <JuceHeader.h>
-#include <cmath>
+#include <juce_audio_utils/juce_audio_utils.h>
+#include <juce_dsp/juce_dsp.h>
+#include <vector>
 
 class JsfxHost
 {
 public:
-    bool loadScript(const juce::File& scriptFile)
+    struct SliderDescriptor
     {
-        loadedScript = scriptFile;
-       #if MRGEE_HAS_YSFX
-        // TODO: initialize ysfx VM + compile script.
-       #endif
-        return scriptFile.existsAsFile();
-    }
+        int index = 0;
+        juce::String paramId;
+        juce::String name;
+        float defaultValue = 0.0f;
+        float minValue = 0.0f;
+        float maxValue = 1.0f;
+        float step = 0.01f;
+        bool isEnum = false;
+        bool isVisible = true;
+        juce::StringArray enumNames;
+    };
 
-    void prepare(double sampleRate, int samplesPerBlock, int channels)
-    {
-        juce::ignoreUnused(sampleRate, samplesPerBlock, channels);
-    }
+    JsfxHost();
+    ~JsfxHost();
 
-    void setSlider(int sliderIndex, float value)
-    {
-        sliderValues.set(sliderIndex, value);
-        #if MRGEE_HAS_YSFX
-        // TODO: ysfx_slider_set_value(runtime, sliderIndex, value);
-        #endif
-    }
+    bool loadBundledScript();
+    void prepare(double sampleRate, int samplesPerBlock, int channels);
+    void reset();
+    void setSlider(int sliderIndex, float value);
+    float getSlider(int sliderIndex) const;
+    void process(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi);
 
-    float getSlider(int sliderIndex) const
-    {
-        return sliderValues[sliderIndex];
-    }
+    const std::vector<SliderDescriptor>& getSliderDescriptors() const noexcept { return sliderDescriptors; }
+    const juce::String& getStatusMessage() const noexcept { return statusMessage; }
+    bool hasRuntime() const noexcept { return runtimeLoaded; }
+    juce::File getMaterializedBundleRoot() const;
 
-    void process(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
-    {
-        juce::ignoreUnused(midi);
-        #if MRGEE_HAS_YSFX
-        // TODO: pass audio + MIDI to ysfx runtime process callback.
-        #else
-        // Mock behavior for bootstrap: soft clip to verify DSP path + parameter mapping.
-        auto gain = juce::jlimit(0.0f, 2.0f, sliderValues[0]);
-        for (auto ch = 0; ch < buffer.getNumChannels(); ++ch)
-        {
-            auto* data = buffer.getWritePointer(ch);
-            for (auto i = 0; i < buffer.getNumSamples(); ++i)
-                data[i] = std::tanh(data[i] * gain);
-        }
-        #endif
-    }
+    static std::vector<SliderDescriptor> loadBundledSliderDescriptors();
 
 private:
-    juce::File loadedScript;
-    juce::Array<float> sliderValues { 1.0f, 0.5f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f };
+    struct BundleEntry
+    {
+        juce::String logicalPath;
+        const char* data = nullptr;
+        int size = 0;
+    };
+
+    struct JsfxBundle
+    {
+        juce::String bundleId;
+        juce::String mainScriptName;
+        std::vector<BundleEntry> entries;
+
+        const BundleEntry* getMainScript() const noexcept;
+    };
+
+    void updateStatus(juce::String message, bool runtimeActive);
+    void loadFallbackDescriptors();
+    void applySliderDefaults();
+    juce::File materializeBundledBundle() const;
+    static JsfxBundle getBundledJsfxBundle();
+    static juce::String getBundledScriptText();
+    static std::vector<SliderDescriptor> parseSliderDescriptors(const juce::String& scriptText);
+
+    std::vector<SliderDescriptor> sliderDescriptors;
+    juce::Array<float> sliderValues;
+    juce::String statusMessage;
+    bool runtimeLoaded = false;
+
+   #if MRGEE_HAS_YSFX
+    struct Runtime;
+    std::unique_ptr<Runtime> runtime;
+   #endif
 };

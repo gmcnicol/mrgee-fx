@@ -1,7 +1,7 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 
-MrgeeJSFXBridgeAudioProcessor::MrgeeJSFXBridgeAudioProcessor()
+MrgeeJsfxAudioProcessor::MrgeeJsfxAudioProcessor()
     : AudioProcessor(BusesProperties()
    #if ! JucePlugin_IsMidiEffect
    #if ! JucePlugin_IsSynth
@@ -10,28 +10,49 @@ MrgeeJSFXBridgeAudioProcessor::MrgeeJSFXBridgeAudioProcessor()
                          .withOutput("Output", juce::AudioChannelSet::stereo(), true)
    #endif
       ),
-      apvts(*this, nullptr, "PARAMS", createParameterLayout())
+      apvts(*this, nullptr, "PARAMS", createParameterLayout(JsfxHost::loadBundledSliderDescriptors()))
 {
+    jsfxHost.loadBundledScript();
 }
 
-juce::AudioProcessorValueTreeState::ParameterLayout MrgeeJSFXBridgeAudioProcessor::createParameterLayout()
+juce::AudioProcessorValueTreeState::ParameterLayout MrgeeJsfxAudioProcessor::createParameterLayout(
+    const std::vector<JsfxHost::SliderDescriptor>& descriptors)
 {
     std::vector<std::unique_ptr<juce::RangedAudioParameter>> parameters;
-    for (int i = 0; i < 8; ++i)
+    parameters.reserve(descriptors.size());
+
+    for (const auto& descriptor : descriptors)
     {
-        auto id = juce::String("slider") + juce::String(i + 1);
-        auto name = juce::String("Slider ") + juce::String(i + 1);
-        parameters.push_back(std::make_unique<juce::AudioParameterFloat>(id, name, 0.0f, 1.0f, i == 0 ? 1.0f : 0.0f));
+        if (descriptor.isEnum && descriptor.enumNames.size() > 0)
+        {
+            parameters.push_back(std::make_unique<juce::AudioParameterChoice>(
+                descriptor.paramId,
+                descriptor.name,
+                descriptor.enumNames,
+                juce::jlimit(0, descriptor.enumNames.size() - 1, juce::roundToInt(descriptor.defaultValue))));
+            continue;
+        }
+
+        auto range = juce::NormalisableRange<float>(descriptor.minValue, descriptor.maxValue, descriptor.step);
+        if (descriptor.paramId == "slider2")
+            range.setSkewForCentre(1000.0f);
+
+        parameters.push_back(std::make_unique<juce::AudioParameterFloat>(
+            descriptor.paramId,
+            descriptor.name,
+            range,
+            descriptor.defaultValue));
     }
+
     return { parameters.begin(), parameters.end() };
 }
 
-const juce::String MrgeeJSFXBridgeAudioProcessor::getName() const
+const juce::String MrgeeJsfxAudioProcessor::getName() const
 {
     return JucePlugin_Name;
 }
 
-bool MrgeeJSFXBridgeAudioProcessor::acceptsMidi() const
+bool MrgeeJsfxAudioProcessor::acceptsMidi() const
 {
    #if JucePlugin_WantsMidiInput
     return true;
@@ -40,7 +61,7 @@ bool MrgeeJSFXBridgeAudioProcessor::acceptsMidi() const
    #endif
 }
 
-bool MrgeeJSFXBridgeAudioProcessor::producesMidi() const
+bool MrgeeJsfxAudioProcessor::producesMidi() const
 {
    #if JucePlugin_ProducesMidiOutput
     return true;
@@ -49,7 +70,7 @@ bool MrgeeJSFXBridgeAudioProcessor::producesMidi() const
    #endif
 }
 
-bool MrgeeJSFXBridgeAudioProcessor::isMidiEffect() const
+bool MrgeeJsfxAudioProcessor::isMidiEffect() const
 {
    #if JucePlugin_IsMidiEffect
     return true;
@@ -58,48 +79,49 @@ bool MrgeeJSFXBridgeAudioProcessor::isMidiEffect() const
    #endif
 }
 
-double MrgeeJSFXBridgeAudioProcessor::getTailLengthSeconds() const
+double MrgeeJsfxAudioProcessor::getTailLengthSeconds() const
 {
     return 0.0;
 }
 
-int MrgeeJSFXBridgeAudioProcessor::getNumPrograms()
+int MrgeeJsfxAudioProcessor::getNumPrograms()
 {
     return 1;
 }
 
-int MrgeeJSFXBridgeAudioProcessor::getCurrentProgram()
+int MrgeeJsfxAudioProcessor::getCurrentProgram()
 {
     return 0;
 }
 
-void MrgeeJSFXBridgeAudioProcessor::setCurrentProgram(int index)
+void MrgeeJsfxAudioProcessor::setCurrentProgram(int index)
 {
     juce::ignoreUnused(index);
 }
 
-const juce::String MrgeeJSFXBridgeAudioProcessor::getProgramName(int index)
+const juce::String MrgeeJsfxAudioProcessor::getProgramName(int index)
 {
     juce::ignoreUnused(index);
     return {};
 }
 
-void MrgeeJSFXBridgeAudioProcessor::changeProgramName(int index, const juce::String& newName)
+void MrgeeJsfxAudioProcessor::changeProgramName(int index, const juce::String& newName)
 {
     juce::ignoreUnused(index, newName);
 }
 
-void MrgeeJSFXBridgeAudioProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
+void MrgeeJsfxAudioProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
     jsfxHost.prepare(sampleRate, samplesPerBlock, getTotalNumOutputChannels());
 }
 
-void MrgeeJSFXBridgeAudioProcessor::releaseResources()
+void MrgeeJsfxAudioProcessor::releaseResources()
 {
+    jsfxHost.reset();
 }
 
 #if ! JucePlugin_IsMidiEffect
-bool MrgeeJSFXBridgeAudioProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const
+bool MrgeeJsfxAudioProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const
 {
    #if JucePlugin_IsSynth
     juce::ignoreUnused(layouts);
@@ -119,31 +141,26 @@ bool MrgeeJSFXBridgeAudioProcessor::isBusesLayoutSupported(const BusesLayout& la
 }
 #endif
 
-void MrgeeJSFXBridgeAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
+void MrgeeJsfxAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
 {
     juce::ScopedNoDenormals noDenormals;
 
-    for (int i = 0; i < 8; ++i)
+    const auto& descriptors = jsfxHost.getSliderDescriptors();
+    for (const auto& descriptor : descriptors)
     {
-        const auto id = juce::String("slider") + juce::String(i + 1);
-        if (auto* p = apvts.getRawParameterValue(id))
-            jsfxHost.setSlider(i, p->load());
+        if (auto* parameter = apvts.getRawParameterValue(descriptor.paramId))
+            jsfxHost.setSlider(descriptor.index, parameter->load());
     }
 
     jsfxHost.process(buffer, midiMessages);
 }
 
-bool MrgeeJSFXBridgeAudioProcessor::hasEditor() const
+juce::AudioProcessorEditor* MrgeeJsfxAudioProcessor::createEditor()
 {
-    return true;
+    return new MrgeeJsfxAudioProcessorEditor(*this);
 }
 
-juce::AudioProcessorEditor* MrgeeJSFXBridgeAudioProcessor::createEditor()
-{
-    return new MrgeeJSFXBridgeAudioProcessorEditor(*this);
-}
-
-void MrgeeJSFXBridgeAudioProcessor::getStateInformation(juce::MemoryBlock& destData)
+void MrgeeJsfxAudioProcessor::getStateInformation(juce::MemoryBlock& destData)
 {
     if (auto state = apvts.copyState(); state.isValid())
     {
@@ -152,7 +169,7 @@ void MrgeeJSFXBridgeAudioProcessor::getStateInformation(juce::MemoryBlock& destD
     }
 }
 
-void MrgeeJSFXBridgeAudioProcessor::setStateInformation(const void* data, int sizeInBytes)
+void MrgeeJsfxAudioProcessor::setStateInformation(const void* data, int sizeInBytes)
 {
     std::unique_ptr<juce::XmlElement> xmlState(getXmlFromBinary(data, sizeInBytes));
     if (xmlState != nullptr && xmlState->hasTagName(apvts.state.getType()))
@@ -161,5 +178,5 @@ void MrgeeJSFXBridgeAudioProcessor::setStateInformation(const void* data, int si
 
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 {
-    return new MrgeeJSFXBridgeAudioProcessor();
+    return new MrgeeJsfxAudioProcessor();
 }

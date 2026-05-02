@@ -1,0 +1,9 @@
+desc:External Consumer Delay
+author:OpenAI Codex
+
+slider1:120<1,2000,1>Delay
+
+@sample
+spl0 = spl0;
+spl1 = spl1;
+

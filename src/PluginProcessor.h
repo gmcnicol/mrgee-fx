@@ -1,13 +1,13 @@
 #pragma once
 
-#include <JuceHeader.h>
+#include <juce_audio_utils/juce_audio_utils.h>
 #include "JsfxHost.h"
 
-class MrgeeJSFXBridgeAudioProcessor final : public juce::AudioProcessor
+class MrgeeJsfxAudioProcessor final : public juce::AudioProcessor
 {
 public:
-    MrgeeJSFXBridgeAudioProcessor();
-    ~MrgeeJSFXBridgeAudioProcessor() override = default;
+    MrgeeJsfxAudioProcessor();
+    ~MrgeeJsfxAudioProcessor() override = default;
 
     void prepareToPlay(double sampleRate, int samplesPerBlock) override;
     void releaseResources() override;
@@ -39,12 +39,14 @@ public:
 
     juce::AudioProcessorValueTreeState& getAPVTS() { return apvts; }
     JsfxHost& getJsfxHost() { return jsfxHost; }
+    const std::vector<JsfxHost::SliderDescriptor>& getSliderDescriptors() const noexcept { return jsfxHost.getSliderDescriptors(); }
+    const juce::String& getStatusMessage() const noexcept { return jsfxHost.getStatusMessage(); }
 
 private:
-    juce::AudioProcessorValueTreeState apvts;
     JsfxHost jsfxHost;
+    juce::AudioProcessorValueTreeState apvts;
 
-    static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
+    static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout(const std::vector<JsfxHost::SliderDescriptor>& descriptors);
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MrgeeJSFXBridgeAudioProcessor)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MrgeeJsfxAudioProcessor)
 };

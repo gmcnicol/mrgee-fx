@@ -1,0 +1,2 @@
+external-consumer-asset
+

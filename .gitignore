@@ -1,8 +1,53 @@
-/build
-/.idea
-/.vscode
+# Build directories
+/build/
+/build-*/
+/cmake-build-*/
+/out/
+
+# CMake / Ninja generated files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+build.ninja
+.ninja_deps
+.ninja_log
+
+# C / C++ build products
+*.a
+*.d
+*.dll
+*.dSYM/
+*.dylib
+*.exe
+*.exp
+*.idb
+*.ilk
+*.lib
+*.lo
+*.o
+*.obj
+*.pdb
+*.so
+
+# JUCE/plugin artefacts
+*_artefacts/
+*.app/
+*.component/
+*.vst3/
+*.lv2/
+*.aaxplugin/
+juce_binarydata_*/
+juce_vst3_helper
+
+# Local dependencies fetched by bootstrap scripts
+third_party/JUCE
+third_party/ysfx
+
+# IDE / OS files
+/.idea/
+/.vscode/
 *.user
 *.suo
 *.DS_Store
-third_party/JUCE
-third_party/ysfx

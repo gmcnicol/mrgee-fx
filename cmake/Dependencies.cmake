@@ -1,8 +1,12 @@
 include(FetchContent)
 
+get_filename_component(MRGEE_FX_DEPENDENCY_ROOT "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)
+
 # JUCE
-if(EXISTS "${CMAKE_SOURCE_DIR}/third_party/JUCE/CMakeLists.txt")
-    add_subdirectory("${CMAKE_SOURCE_DIR}/third_party/JUCE" "${CMAKE_BINARY_DIR}/JUCE")
+if(TARGET juce::juce_audio_utils)
+    message(STATUS "JUCE target already available")
+elseif(EXISTS "${MRGEE_FX_DEPENDENCY_ROOT}/third_party/JUCE/CMakeLists.txt")
+    add_subdirectory("${MRGEE_FX_DEPENDENCY_ROOT}/third_party/JUCE" "${CMAKE_CURRENT_BINARY_DIR}/JUCE")
 elseif(MRGEE_FETCH_JUCE)
     message(STATUS "JUCE not found in third_party/JUCE, fetching from GitHub...")
     FetchContent_Declare(
@@ -18,8 +22,11 @@ endif()
 # ysfx
 set(MRGEE_YSFX_ENABLED OFF)
 if(MRGEE_USE_YSFX)
-    if(EXISTS "${CMAKE_SOURCE_DIR}/third_party/ysfx/CMakeLists.txt")
-        add_subdirectory("${CMAKE_SOURCE_DIR}/third_party/ysfx" "${CMAKE_BINARY_DIR}/ysfx")
+    if(TARGET ysfx)
+        set(MRGEE_YSFX_ENABLED ON)
+        message(STATUS "ysfx target already available")
+    elseif(EXISTS "${MRGEE_FX_DEPENDENCY_ROOT}/third_party/ysfx/CMakeLists.txt")
+        add_subdirectory("${MRGEE_FX_DEPENDENCY_ROOT}/third_party/ysfx" "${CMAKE_CURRENT_BINARY_DIR}/ysfx")
         set(MRGEE_YSFX_ENABLED ON)
         if(TARGET ysfx)
             message(STATUS "ysfx target found and enabled")
