@@ -1,0 +1,10 @@
+desc:Mrgee Asset Smoke
+author:OpenAI Codex
+tags:test utility
+
+slider1:0<0,1,1>Asset Mode {A,B}
+
+@sample
+spl0 = spl0;
+spl1 = spl1;
+

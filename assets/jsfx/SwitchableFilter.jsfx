@@ -1,0 +1,62 @@
+desc:Mrgee Switchable Filter
+author:OpenAI Codex
+tags:filter lowpass highpass utility
+
+slider1:0<0,1,1>Mode {Lowpass,Highpass}
+slider2:1000<20,20000,1>Cutoff
+slider3:0.707<0.1,10,0.001>Q
+slider4:0<0,2,1>Slope {12 dB,24 dB,48 dB}
+
+@init
+two_pi = 2 * $pi;
+
+function stage_process(input, base) local(ic1, ic2, v0, v1, v2, result) (
+  ic1 = state[base];
+  ic2 = state[base + 1];
+
+  v0 = input;
+  v1 = a1 * ic1 + a2 * (v0 - ic2);
+  v2 = ic2 + a2 * ic1 + a3 * (v0 - ic2);
+
+  state[base] = 2 * v1 - ic1;
+  state[base + 1] = 2 * v2 - ic2;
+
+  mode > 0.5 ? (
+    result = v0 - k * v1 - v2;
+  ) : (
+    result = v2;
+  );
+
+  result;
+);
+
+function clear_state() (
+  memset(0, 0, 32);
+);
+
+clear_state();
+
+@slider
+mode = slider1;
+cutoff = min(max(slider2, 20), srate * 0.45);
+q = max(slider3, 0.1);
+k = 1 / q;
+g = tan($pi * cutoff / srate);
+a1 = 1 / (1 + g * (g + k));
+a2 = g * a1;
+a3 = g * a2;
+stage_count = slider4 == 0 ? 1 : slider4 == 1 ? 2 : 4;
+
+@sample
+spl0_stage = spl0;
+spl1_stage = spl1;
+stage = 0;
+loop(stage_count,
+  base = stage * 4;
+  spl0_stage = stage_process(spl0_stage, base);
+  spl1_stage = stage_process(spl1_stage, base + 2);
+  stage += 1;
+);
+
+spl0 = spl0_stage;
+spl1 = spl1_stage;

@@ -1,0 +1,15 @@
+#pragma once
+
+#include <cstddef>
+
+namespace mrgee::generated
+{
+inline constexpr const char* kJsfxBundleId = @cpp_bundle_id@;
+inline constexpr const char* kJsfxMainScriptName = @cpp_main_script_name@;
+inline constexpr int kJsfxMainScriptIndex = 0;
+inline constexpr std::size_t kJsfxBundleEntryCount = @source_count@;
+
+inline constexpr const char* kJsfxBundleLogicalPaths[] = {
+@cpp_logical_paths@};
+}
+

@@ -16,4 +16,6 @@ else
   echo "ysfx already present"
 fi
 
+git -C "$ROOT_DIR/third_party/ysfx" submodule update --init --recursive
+
 echo "Dependencies ready in third_party/."
