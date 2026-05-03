@@ -8,7 +8,7 @@ Turn a JSFX script into the start of a dedicated JUCE VST3/AU plugin.
 - optional JSFX companion files/directories bundled with it
 - stable JUCE parameters derived from JSFX sliders as `slider1`, `slider2`, ...
 - a generic JUCE editor generated from the slider metadata
-- `ysfx` runtime execution when enabled
+- `ysfx` runtime execution
 - VST3, AU, and Standalone targets by default
 
 It is a bootstrap for product plugins, not a generic script-runner plugin.
@@ -39,6 +39,20 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 include(FetchContent)
 
+# ysfx runtime. Fetch this before mrgee-fx so the `ysfx` CMake target exists.
+set(YSFX_PLUGIN OFF CACHE BOOL "" FORCE)
+set(YSFX_TESTS OFF CACHE BOOL "" FORCE)
+set(YSFX_TOOLS OFF CACHE BOOL "" FORCE)
+
+FetchContent_Declare(
+    ysfx
+    GIT_REPOSITORY https://github.com/jpcima/ysfx.git
+    GIT_TAG 8077347ccf4115567aed81400281dca57acbb0cc
+    GIT_SUBMODULES_RECURSE TRUE
+)
+
+FetchContent_MakeAvailable(ysfx)
+
 FetchContent_Declare(
     mrgee_fx
     GIT_REPOSITORY https://github.com/gmcnicol/mrgee-fx.git
@@ -64,6 +78,8 @@ Build it:
 cmake -S . -B build -G Ninja -DMRGEE_USE_YSFX=ON
 cmake --build build
 ```
+
+`MRGEE_USE_YSFX=ON` is the normal path. If `ysfx` is not fetched before `mrgee-fx`, configuration will warn that it is falling back to the mock JSFX host.
 
 On macOS, the default formats produce artefacts under paths like:
 
@@ -182,23 +198,16 @@ Available role flags:
 
 The runtime path forwards JUCE MIDI buffers into `ysfx`, receives MIDI output back from `ysfx`, and preserves event offsets inside each processing block.
 
-## Runtime Modes
+## Runtime
 
-Use the real runtime for plugin work:
+Always use the `ysfx` runtime for plugin work:
 
 ```bash
 cmake -S . -B build -G Ninja -DMRGEE_USE_YSFX=ON
 cmake --build build
 ```
 
-Use the no-ysfx path only when you want to inspect the generated parameter/editor surface without executing audio:
-
-```bash
-cmake -S . -B build-no-ysfx -G Ninja -DMRGEE_USE_YSFX=OFF
-cmake --build build-no-ysfx
-```
-
-With `MRGEE_USE_YSFX=OFF`, slider metadata still becomes JUCE parameters, but audio bypasses.
+The no-ysfx path exists only for this repo's internal smoke tests. Target plugin projects should assume `MRGEE_USE_YSFX=ON`.
 
 ## What You Get First
 
@@ -235,6 +244,8 @@ This repo expects JUCE and ysfx to be available in one of these ways:
 - already provided by the parent CMake project
 - present under `third_party/JUCE` and `third_party/ysfx` in this repo
 - JUCE fetched automatically when `MRGEE_FETCH_JUCE=ON`
+
+For target projects, prefer the Quick Start `FetchContent` pattern: fetch `ysfx` first, then fetch `mrgee-fx`.
 
 For local development on this repo:
 
