@@ -218,6 +218,10 @@ That gets the DSP into a host quickly. From there, make it a real product:
 4. Add any metering, response plots, preset handling, and branded controls.
 5. Keep JUCE responsible for product UX; keep JSFX responsible for DSP behavior.
 
+## Alpha Testing
+
+Unsigned builds are fine for early testers, but macOS and Windows will show trust warnings. Use [docs/alpha-tester-install.md](/Users/gareth/src/mrgee-fx/docs/alpha-tester-install.md) as the tester-facing install guide for unsigned macOS and Windows alpha builds.
+
 ## Import Behavior
 
 When `mrgee-fx` is imported by another project, examples and smoke tools are off by default. Only the public `mrgee_add_jsfx_plugin(...)` helper is exposed.
