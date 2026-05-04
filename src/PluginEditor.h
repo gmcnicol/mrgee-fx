@@ -8,7 +8,7 @@ class MrgeeJsfxAudioProcessorEditor final : public juce::AudioProcessorEditor,
 {
 public:
     explicit MrgeeJsfxAudioProcessorEditor(MrgeeJsfxAudioProcessor&);
-    ~MrgeeJsfxAudioProcessorEditor() override = default;
+    ~MrgeeJsfxAudioProcessorEditor() override;
 
     void paint(juce::Graphics&) override;
     void resized() override;
@@ -18,11 +18,13 @@ private:
 
     void timerCallback() override;
     void refreshStatus();
+    void layoutControlsViewport();
 
     MrgeeJsfxAudioProcessor& audioProcessor;
     juce::Label titleLabel;
     juce::Label subtitleLabel;
     juce::Label statusLabel;
+    juce::Viewport controlsViewport;
     std::unique_ptr<ControlsComponent> controlsComponent;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MrgeeJsfxAudioProcessorEditor)

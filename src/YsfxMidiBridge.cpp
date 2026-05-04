@@ -1,7 +1,5 @@
 #include "YsfxMidiBridge.h"
 
-#if MRGEE_HAS_YSFX
-
 namespace mrgee
 {
 namespace
@@ -37,5 +35,3 @@ void receiveMidiBufferFromYsfx(ysfx_t& effect, juce::MidiBuffer& midi, int numSa
     }
 }
 } // namespace mrgee
-
-#endif

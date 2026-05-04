@@ -6,9 +6,7 @@
 #include <cstring>
 #include <stdexcept>
 
-#if MRGEE_HAS_YSFX
 #include <ysfx.h>
-#endif
 
 #include <iostream>
 
@@ -25,7 +23,6 @@ void require(bool condition, const juce::String& message)
         throw CheckFailure(message.toStdString());
 }
 
-#if MRGEE_HAS_YSFX
 class ScopedYsfxRuntime
 {
 public:
@@ -120,21 +117,15 @@ void verifyMidiRoundTrip()
 
     require(inIt == midiIn.end() && outIt == midiOut.end(), "MIDI event count mismatch after ysfx round-trip");
 }
-#endif
 } // namespace
 
 int main()
 {
     try
     {
-#if MRGEE_HAS_YSFX
         verifyMidiRoundTrip();
         std::cout << "mrgee_midi_bridge_smoke: OK" << std::endl;
         return 0;
-#else
-        std::cerr << "mrgee_midi_bridge_smoke: ysfx support disabled" << std::endl;
-        return 1;
-#endif
     }
     catch (const CheckFailure& failure)
     {

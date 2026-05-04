@@ -6,12 +6,26 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+include(FetchContent)
+
 if(NOT DEFINED MRGEE_FX_SOURCE_DIR)
     get_filename_component(MRGEE_FX_SOURCE_DIR "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
 endif()
 
 set(MRGEE_BUILD_EXAMPLES OFF CACHE BOOL "Do not build mrgee-fx examples from consumer smoke" FORCE)
-set(MRGEE_USE_YSFX OFF CACHE BOOL "Keep external consumer smoke configure/build small" FORCE)
+set(YSFX_PLUGIN OFF CACHE BOOL "" FORCE)
+set(YSFX_TESTS OFF CACHE BOOL "" FORCE)
+set(YSFX_TOOLS OFF CACHE BOOL "" FORCE)
+set(YSFX_SKIP_CHECKSUM ON CACHE BOOL "" FORCE)
+
+FetchContent_Declare(
+    ysfx
+    GIT_REPOSITORY https://github.com/jpcima/ysfx.git
+    GIT_TAG 8077347ccf4115567aed81400281dca57acbb0cc
+    GIT_SUBMODULES_RECURSE TRUE
+)
+
+FetchContent_MakeAvailable(ysfx)
 
 add_subdirectory("${MRGEE_FX_SOURCE_DIR}" "${CMAKE_BINARY_DIR}/_deps/mrgee-fx")
 
@@ -28,4 +42,3 @@ mrgee_add_jsfx_plugin(
         "${CMAKE_CURRENT_LIST_DIR}/jsfx/lib"
     FORMATS Standalone
 )
-

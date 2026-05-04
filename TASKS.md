@@ -14,7 +14,7 @@ Use `ysfx` as the JSFX runtime library for dedicated plugin exports, not as a ge
 - Runtime model:
   - bundled JSFX asset embedded per plugin target
   - `ysfx` is the real DSP path when enabled
-  - `MRGEE_USE_YSFX=OFF` remains a degraded developer/build path only
+  - `ysfx` is a hard runtime requirement
 - Primary example plugin:
   - bundled asset: [assets/jsfx/SwitchableFilter.jsfx](/Users/gareth/src/mrgee-fx/assets/jsfx/SwitchableFilter.jsfx)
   - exported product target should be a dedicated switchable-filter plugin, not a generic bridge/runner
@@ -37,7 +37,7 @@ Use `ysfx` as the JSFX runtime library for dedicated plugin exports, not as a ge
 - Notes:
   - `2026-04-18`: started refactor pass from generic-host framing to dedicated per-plugin target layout.
   - `2026-04-18`: replaced the top-level single bridge declaration with a reusable `mrgee_add_ysfx_plugin(...)` helper and renamed the shipped example target to `MrgeeSwitchableFilter`.
-  - `2026-04-18`: verified the renamed dedicated target with `cmake -S . -B build-check-off -G Ninja -DMRGEE_USE_YSFX=OFF`, `cmake --build build-check-off`, `cmake -S . -B build-check-on -G Ninja -DMRGEE_USE_YSFX=ON`, and `cmake --build build-check-on`.
+  - `2026-04-18`: verified the renamed dedicated target with configure/build smoke checks.
 
 ## Task 2: Remove script-runner branding from product/UI/docs
 - Status: `done`
@@ -132,10 +132,10 @@ Use `ysfx` as the JSFX runtime library for dedicated plugin exports, not as a ge
 - The repo presents the shipped example as a dedicated switchable-filter plugin target, not a generic JSFX bridge.
 - `README.md` explains the architecture as “one JUCE plugin per bundled JSFX project.”
 - `scripts/run_ralph_handoff.sh` runs Codex non-interactively with full access.
-- `MRGEE_USE_YSFX=OFF` and `MRGEE_USE_YSFX=ON` still configure/build.
+- `ysfx` remains required for configure/build.
 - The direct smoke probe still passes.
 - The headless VST3 smoke host still passes against the dedicated plugin artifact.
 - Notes:
   - set this section to `done` only after all tasks above are either `done`, or a remaining `blocked` task has a documented external blocker and agreed scope cut
-  - `2026-04-18`: satisfied with verified commands: `cmake -S . -B build-check-off -G Ninja -DMRGEE_USE_YSFX=OFF`, `cmake --build build-check-off`, `./build-check-off/mrgee_jsfx_smoke_artefacts/mrgee_jsfx_smoke`, `cmake -S . -B build-check-on -G Ninja -DMRGEE_USE_YSFX=ON`, `cmake --build build-check-on`, `./build-check-on/mrgee_jsfx_smoke_artefacts/RelWithDebInfo/mrgee_jsfx_smoke`, and `./build-check-on/mrgee_vst3_smoke_artefacts/RelWithDebInfo/mrgee_vst3_smoke "./build-check-on/MrgeeSwitchableFilter_artefacts/RelWithDebInfo/VST3/Mrgee Switchable Filter.vst3"`.
+  - `2026-04-18`: satisfied with configure/build and JSFX/VST3 smoke checks.
   - `2026-04-18`: re-verified after Task 6 with `./scripts/run_local_verification.sh`, including the new `mrgee_midi_bridge_smoke` proof point for JUCE-to-`ysfx` MIDI bridging.

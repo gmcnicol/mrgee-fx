@@ -42,6 +42,7 @@ function(mrgee_add_jsfx_plugin)
         NEEDS_MIDI_INPUT
         NEEDS_MIDI_OUTPUT
         IS_MIDI_EFFECT
+        COPY_PLUGIN_AFTER_BUILD
     )
     set(one_value_args
         TARGET
@@ -63,7 +64,7 @@ function(mrgee_add_jsfx_plugin)
         endif()
     endforeach()
 
-    foreach(flag IN ITEMS IS_SYNTH NEEDS_MIDI_INPUT NEEDS_MIDI_OUTPUT IS_MIDI_EFFECT)
+    foreach(flag IN ITEMS IS_SYNTH NEEDS_MIDI_INPUT NEEDS_MIDI_OUTPUT IS_MIDI_EFFECT COPY_PLUGIN_AFTER_BUILD)
         if(NOT DEFINED MRGEE_PLUGIN_${flag})
             set(MRGEE_PLUGIN_${flag} FALSE)
         endif()
@@ -79,6 +80,10 @@ function(mrgee_add_jsfx_plugin)
 
     if(NOT MRGEE_PLUGIN_FORMATS)
         set(MRGEE_PLUGIN_FORMATS VST3 AU Standalone)
+    endif()
+
+    if(NOT TARGET ysfx)
+        message(FATAL_ERROR "mrgee_add_jsfx_plugin requires the ysfx target")
     endif()
 
     _mrgee_resolve_path(jsfx_file "${MRGEE_PLUGIN_JSFX_FILE}")
@@ -150,7 +155,7 @@ function(mrgee_add_jsfx_plugin)
         NEEDS_MIDI_OUTPUT ${MRGEE_PLUGIN_NEEDS_MIDI_OUTPUT}
         IS_MIDI_EFFECT ${MRGEE_PLUGIN_IS_MIDI_EFFECT}
         EDITOR_WANTS_KEYBOARD_FOCUS FALSE
-        COPY_PLUGIN_AFTER_BUILD TRUE
+        COPY_PLUGIN_AFTER_BUILD ${MRGEE_PLUGIN_COPY_PLUGIN_AFTER_BUILD}
         PLUGIN_MANUFACTURER_CODE ${MRGEE_PLUGIN_PLUGIN_MANUFACTURER_CODE}
         PLUGIN_CODE ${MRGEE_PLUGIN_PLUGIN_CODE}
         FORMATS ${MRGEE_PLUGIN_FORMATS}
@@ -182,22 +187,15 @@ function(mrgee_add_jsfx_plugin)
             JUCE_USE_CURL=0
     )
 
-    if(MRGEE_YSFX_ENABLED)
-        target_compile_definitions(${MRGEE_PLUGIN_TARGET} PRIVATE MRGEE_HAS_YSFX=1)
-    endif()
-
     target_link_libraries(${MRGEE_PLUGIN_TARGET}
         PRIVATE
             juce::juce_audio_utils
             juce::juce_dsp
             ${asset_target}
+            ysfx
         PUBLIC
             juce::juce_recommended_config_flags
             juce::juce_recommended_lto_flags
             juce::juce_recommended_warning_flags
     )
-
-    if(TARGET ysfx)
-        target_link_libraries(${MRGEE_PLUGIN_TARGET} PRIVATE ysfx)
-    endif()
 endfunction()
