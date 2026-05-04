@@ -7,6 +7,8 @@
 #include <algorithm>
 #include <cstring>
 
+#include <ysfx.h>
+
 namespace
 {
 juce::String sanitizeRelativePath(juce::String path)
@@ -44,7 +46,6 @@ juce::File getBundleRoot()
         .getChildFile(mrgee::generated::kJsfxBundleId);
 }
 
-#if MRGEE_HAS_YSFX
 juce::String sanitizeSliderName(juce::String name)
 {
     if (const auto brace = name.indexOfChar('{'); brace >= 0)
@@ -52,11 +53,7 @@ juce::String sanitizeSliderName(juce::String name)
 
     return name.trim();
 }
-#endif
 }
-
-#if MRGEE_HAS_YSFX
-#include <ysfx.h>
 
 struct JsfxHost::Runtime
 {
@@ -88,13 +85,12 @@ struct JsfxHost::Runtime
             ysfx_config_free(config);
     }
 };
-#endif
 
 JsfxHost::JsfxHost()
 {
     loadFallbackDescriptors();
     applySliderDefaults();
-    updateStatus("ysfx not loaded yet. Bundled metadata available; audio will bypass until ysfx is active.", false);
+    updateStatus("ysfx runtime not loaded yet.", false);
 }
 
 JsfxHost::~JsfxHost() = default;
@@ -121,7 +117,6 @@ bool JsfxHost::loadBundledScript()
 
     auto scriptFile = materializeBundledBundle();
 
-   #if MRGEE_HAS_YSFX
     runtime = std::make_unique<Runtime>();
     runtime->config = ysfx_config_new();
     if (runtime->config == nullptr)
@@ -256,15 +251,10 @@ bool JsfxHost::loadBundledScript()
     ysfx_init(runtime->effect);
     updateStatus("ysfx runtime loaded bundled JSFX script.", true);
     return true;
-   #else
-    updateStatus("ysfx support was compiled out. Parameters come from bundled metadata and audio bypasses.", false);
-    return false;
-   #endif
 }
 
 void JsfxHost::prepare(double sampleRate, int samplesPerBlock, int channels)
 {
-   #if MRGEE_HAS_YSFX
     if (runtime != nullptr && runtime->effect != nullptr)
     {
         ysfx_set_sample_rate(runtime->effect, sampleRate);
@@ -272,29 +262,22 @@ void JsfxHost::prepare(double sampleRate, int samplesPerBlock, int channels)
         ysfx_set_midi_capacity(runtime->effect, static_cast<uint32_t>(juce::jmax(256, samplesPerBlock * 4)), true);
         ysfx_init(runtime->effect);
     }
-   #endif
 
-    juce::ignoreUnused(sampleRate, samplesPerBlock, channels);
+    juce::ignoreUnused(channels);
 }
 
 void JsfxHost::reset()
 {
-   #if MRGEE_HAS_YSFX
     if (runtime != nullptr && runtime->effect != nullptr)
         ysfx_init(runtime->effect);
-   #endif
-
 }
 
 void JsfxHost::setSlider(int sliderIndex, float value)
 {
     sliderValues.set(sliderIndex, value);
 
-   #if MRGEE_HAS_YSFX
     if (runtime != nullptr && runtime->effect != nullptr)
         ysfx_slider_set_value(runtime->effect, static_cast<uint32_t>(sliderIndex), value);
-   #endif
-
 }
 
 float JsfxHost::getSlider(int sliderIndex) const
@@ -302,9 +285,16 @@ float JsfxHost::getSlider(int sliderIndex) const
     return sliderValues[sliderIndex];
 }
 
+float JsfxHost::getRuntimeSlider(int sliderIndex) const
+{
+    if (runtime != nullptr && runtime->effect != nullptr && sliderIndex >= 0)
+        return static_cast<float>(ysfx_slider_get_value(runtime->effect, static_cast<uint32_t>(sliderIndex)));
+
+    return getSlider(sliderIndex);
+}
+
 void JsfxHost::process(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
 {
-   #if MRGEE_HAS_YSFX
     if (runtime != nullptr && runtime->effect != nullptr)
     {
         mrgee::sendMidiBufferToYsfx(*runtime->effect, midi, buffer.getNumSamples());
@@ -326,7 +316,6 @@ void JsfxHost::process(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
         mrgee::receiveMidiBufferFromYsfx(*runtime->effect, midi, buffer.getNumSamples());
         return;
     }
-   #endif
 
     juce::ignoreUnused(buffer, midi);
 }

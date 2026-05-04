@@ -36,6 +36,7 @@ struct ComponentSummary
     int sliderCount = 0;
     int comboCount = 0;
     int buttonCount = 0;
+    int viewportCount = 0;
     juce::StringArray labelTexts;
 };
 
@@ -50,11 +51,107 @@ void collectComponentSummary(juce::Component& component, ComponentSummary& summa
     if (dynamic_cast<juce::Button*>(&component) != nullptr)
         ++summary.buttonCount;
 
+    if (dynamic_cast<juce::Viewport*>(&component) != nullptr)
+        ++summary.viewportCount;
+
     if (auto* label = dynamic_cast<juce::Label*>(&component))
         summary.labelTexts.add(label->getText());
 
     for (auto* child : component.getChildren())
         collectComponentSummary(*child, summary);
+}
+
+juce::String componentTypeName(juce::Component& component)
+{
+    if (dynamic_cast<juce::Viewport*>(&component) != nullptr)
+        return "Viewport";
+
+    if (dynamic_cast<juce::Slider*>(&component) != nullptr)
+        return "Slider";
+
+    if (dynamic_cast<juce::ComboBox*>(&component) != nullptr)
+        return "ComboBox";
+
+    if (dynamic_cast<juce::Button*>(&component) != nullptr)
+        return "Button";
+
+    if (dynamic_cast<juce::ScrollBar*>(&component) != nullptr)
+        return "ScrollBar";
+
+    if (dynamic_cast<juce::Label*>(&component) != nullptr)
+        return "Label";
+
+    return "Component";
+}
+
+void lintComponentBounds(juce::Component& component, const juce::String& path)
+{
+    const auto childCount = component.getNumChildComponents();
+
+    for (int childIndex = 0; childIndex < childCount; ++childIndex)
+    {
+        auto* child = component.getChildComponent(childIndex);
+        require(child != nullptr, "Null child component at " + path);
+
+        const auto bounds = child->getBounds();
+        auto childName = child->getName();
+        if (childName.isEmpty())
+            childName = componentTypeName(*child);
+        const auto childPath = path + "/" + childName;
+
+        if (dynamic_cast<juce::ScrollBar*>(child) != nullptr && ! child->isVisible())
+            continue;
+
+        const bool isLintedControl = dynamic_cast<juce::Label*>(child) != nullptr
+            || dynamic_cast<juce::Slider*>(child) != nullptr
+            || dynamic_cast<juce::ComboBox*>(child) != nullptr
+            || dynamic_cast<juce::Viewport*>(child) != nullptr;
+
+        require(child->isVisible(), "Hidden UI component: " + childPath);
+        require(bounds.getWidth() > 0 && bounds.getHeight() > 0,
+                "Collapsed UI component: " + childPath + " bounds=" + bounds.toString());
+        require(bounds.getX() >= 0 && bounds.getY() >= 0,
+                "UI component starts outside parent: " + childPath + " bounds=" + bounds.toString());
+
+        if (auto* viewport = dynamic_cast<juce::Viewport*>(&component);
+            viewport != nullptr && viewport->getViewedComponent() == child)
+        {
+            require(bounds.getWidth() <= component.getWidth(),
+                    "Viewport content is horizontally clipped: " + childPath + " bounds=" + bounds.toString());
+        }
+        else
+        {
+            if (isLintedControl)
+                require(bounds.getRight() <= component.getWidth() && bounds.getBottom() <= component.getHeight(),
+                        "UI component is clipped by parent: " + childPath + " bounds=" + bounds.toString()
+                            + " parent=" + component.getLocalBounds().toString());
+        }
+
+        if (dynamic_cast<juce::Slider*>(child) != nullptr)
+            require(bounds.getWidth() >= 96 && bounds.getHeight() >= 72,
+                    "Slider is too small to use: " + childPath + " bounds=" + bounds.toString());
+
+        if (dynamic_cast<juce::ComboBox*>(child) != nullptr)
+            require(bounds.getWidth() >= 96 && bounds.getHeight() >= 24,
+                    "ComboBox is too small to use: " + childPath + " bounds=" + bounds.toString());
+
+        if (auto* label = dynamic_cast<juce::Label*>(child))
+            require(label->getText().trim().isNotEmpty(),
+                    "Visible label has no text: " + childPath);
+
+        lintComponentBounds(*child, childPath);
+    }
+}
+
+void lintEditorLayout(juce::AudioProcessorEditor& editor, int width, int height)
+{
+    editor.setSize(width, height);
+    editor.resized();
+
+    require(editor.getWidth() == width && editor.getHeight() == height,
+            "Editor did not accept lint size "
+                + juce::String(width) + "x" + juce::String(height));
+    lintComponentBounds(editor, "editor");
 }
 
 juce::AudioProcessorParameter* findParameterByName(juce::AudioProcessor& processor, const juce::String& name)
@@ -146,14 +243,14 @@ juce::AudioBuffer<float> renderDirectProcessor(float mode, float cutoff, float q
     return rendered;
 }
 
-void verifyDirectRuntimeAndUi(bool expectRuntime)
+void verifyDirectRuntimeAndUi()
 {
     MrgeeJsfxAudioProcessor processor;
     auto& host = processor.getJsfxHost();
     const auto& descriptors = processor.getSliderDescriptors();
 
     require(descriptors.size() == 4, "Expected 4 JSFX descriptors");
-    require(host.hasRuntime() == expectRuntime, "Unexpected ysfx runtime state: " + host.getStatusMessage());
+    require(host.hasRuntime(), "ysfx runtime was not loaded: " + host.getStatusMessage());
 
     const auto names = expectedParameterNames();
     for (size_t i = 0; i < descriptors.size(); ++i)
@@ -176,10 +273,7 @@ void verifyDirectRuntimeAndUi(bool expectRuntime)
     require(descriptors[3].isEnum && descriptors[3].enumNames == juce::StringArray({ "12 dB", "24 dB", "48 dB" }),
             "Slope enum metadata mismatch: got [" + descriptors[3].enumNames.joinIntoString(", ") + "]");
 
-    if (expectRuntime)
-        require(host.getStatusMessage().containsIgnoreCase("ysfx runtime loaded"), "Status did not report active ysfx runtime");
-    else
-        require(host.getStatusMessage().containsIgnoreCase("bypass"), "Degraded path did not report bypass behavior");
+    require(host.getStatusMessage().containsIgnoreCase("ysfx runtime loaded"), "Status did not report active ysfx runtime");
 
     auto directIdsA = juce::StringArray();
     auto directIdsB = juce::StringArray();
@@ -214,11 +308,14 @@ void verifyDirectRuntimeAndUi(bool expectRuntime)
 
     auto editor = std::unique_ptr<juce::AudioProcessorEditor>(processor.createEditor());
     require(editor != nullptr, "Failed to create editor");
-    editor->resized();
+    lintComponentBounds(*editor, "editor.initial");
+    lintEditorLayout(*editor, 960, 620);
+    lintEditorLayout(*editor, 560, 420);
 
     ComponentSummary summary;
     collectComponentSummary(*editor, summary);
 
+    require(summary.viewportCount >= 1, "Expected scrollable editor viewport");
     require(summary.sliderCount >= 2, "Expected at least 2 sliders in editor");
     require(summary.comboCount + summary.buttonCount >= 2, "Expected enum controls in editor");
 
@@ -232,10 +329,7 @@ void verifyDirectRuntimeAndUi(bool expectRuntime)
     const auto lowpassLow = analyseFrequencyMagnitude(rendered, 200.0);
     const auto lowpassHigh = analyseFrequencyMagnitude(rendered, 5000.0);
 
-    if (expectRuntime)
-        require(lowpassLow > lowpassHigh * 3.0, "Direct render did not behave like active ysfx lowpass");
-    else
-        require(std::abs(lowpassLow - lowpassHigh) < juce::jmax(0.2, lowpassLow * 0.75), "Bypass path unexpectedly filtered audio");
+    require(lowpassLow > lowpassHigh * 3.0, "Direct render did not behave like active ysfx lowpass");
 }
 
 }
@@ -246,14 +340,8 @@ int main(int argc, char* argv[])
 
     try
     {
-       #if MRGEE_HAS_YSFX
-        constexpr bool expectRuntime = true;
-       #else
-        constexpr bool expectRuntime = false;
-       #endif
-
         juce::ignoreUnused(argc, argv);
-        verifyDirectRuntimeAndUi(expectRuntime);
+        verifyDirectRuntimeAndUi();
 
         std::cout << "jsfx_smoke: OK" << std::endl;
         return 0;

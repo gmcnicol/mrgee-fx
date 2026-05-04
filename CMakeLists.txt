@@ -8,7 +8,6 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 option(MRGEE_FETCH_JUCE "Fetch JUCE automatically when third_party/JUCE is missing" ON)
-option(MRGEE_USE_YSFX "Enable ysfx runtime integration" ON)
 option(MRGEE_BUILD_EXAMPLES "Build mrgee-fx examples and smoke tools" ${PROJECT_IS_TOP_LEVEL})
 
 include(cmake/Dependencies.cmake)
@@ -55,10 +54,6 @@ target_compile_definitions(mrgee_jsfx_smoke
         JUCE_PLUGINHOST_VST3=1
 )
 
-if(MRGEE_YSFX_ENABLED)
-    target_compile_definitions(mrgee_jsfx_smoke PRIVATE MRGEE_HAS_YSFX=1)
-endif()
-
 target_link_libraries(mrgee_jsfx_smoke
     PRIVATE
         ${MRGEE_PRIMARY_PLUGIN_TARGET}
@@ -83,10 +78,6 @@ target_compile_definitions(mrgee_jsfx_asset_smoke
         JUCE_USE_CURL=0
 )
 
-if(MRGEE_YSFX_ENABLED)
-    target_compile_definitions(mrgee_jsfx_asset_smoke PRIVATE MRGEE_HAS_YSFX=1)
-endif()
-
 target_link_libraries(mrgee_jsfx_asset_smoke
     PRIVATE
         MrgeeAssetSmoke
@@ -98,33 +89,30 @@ target_link_libraries(mrgee_jsfx_asset_smoke
         juce::juce_recommended_warning_flags
 )
 
-if(MRGEE_YSFX_ENABLED)
-    juce_add_console_app(mrgee_midi_bridge_smoke PRODUCT_NAME "mrgee_midi_bridge_smoke")
+juce_add_console_app(mrgee_midi_bridge_smoke PRODUCT_NAME "mrgee_midi_bridge_smoke")
 
-    target_sources(mrgee_midi_bridge_smoke
-        PRIVATE
-            tools/midi_bridge_smoke.cpp
-            src/YsfxMidiBridge.cpp
-            src/YsfxMidiBridge.h
-    )
+target_sources(mrgee_midi_bridge_smoke
+    PRIVATE
+        tools/midi_bridge_smoke.cpp
+        src/YsfxMidiBridge.cpp
+        src/YsfxMidiBridge.h
+)
 
-    target_compile_definitions(mrgee_midi_bridge_smoke
-        PRIVATE
-            JUCE_WEB_BROWSER=0
-            JUCE_USE_CURL=0
-            MRGEE_HAS_YSFX=1
-    )
+target_compile_definitions(mrgee_midi_bridge_smoke
+    PRIVATE
+        JUCE_WEB_BROWSER=0
+        JUCE_USE_CURL=0
+)
 
-    target_link_libraries(mrgee_midi_bridge_smoke
-        PRIVATE
-            juce::juce_audio_basics
-            ysfx
-        PUBLIC
-            juce::juce_recommended_config_flags
-            juce::juce_recommended_lto_flags
-            juce::juce_recommended_warning_flags
-    )
-endif()
+target_link_libraries(mrgee_midi_bridge_smoke
+    PRIVATE
+        juce::juce_audio_basics
+        ysfx
+    PUBLIC
+        juce::juce_recommended_config_flags
+        juce::juce_recommended_lto_flags
+        juce::juce_recommended_warning_flags
+)
 
 juce_add_console_app(mrgee_vst3_smoke PRODUCT_NAME "mrgee_vst3_smoke")
 

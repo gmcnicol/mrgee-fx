@@ -43,6 +43,7 @@ include(FetchContent)
 set(YSFX_PLUGIN OFF CACHE BOOL "" FORCE)
 set(YSFX_TESTS OFF CACHE BOOL "" FORCE)
 set(YSFX_TOOLS OFF CACHE BOOL "" FORCE)
+set(YSFX_SKIP_CHECKSUM ON CACHE BOOL "" FORCE)
 
 FetchContent_Declare(
     ysfx
@@ -75,11 +76,11 @@ mrgee_add_jsfx_plugin(
 Build it:
 
 ```bash
-cmake -S . -B build -G Ninja -DMRGEE_USE_YSFX=ON
+cmake -S . -B build -G Ninja
 cmake --build build
 ```
 
-`MRGEE_USE_YSFX=ON` is the normal path. If `ysfx` is not fetched before `mrgee-fx`, configuration will warn that it is falling back to the mock JSFX host.
+`ysfx` is mandatory. Fetch it before `mrgee-fx`; otherwise configuration fails.
 
 On macOS, the default formats produce artefacts under paths like:
 
@@ -156,6 +157,7 @@ Optional arguments:
 - `PLUGIN_MANUFACTURER_CODE`, default `MrgE`
 - `FORMATS`, default `VST3 AU Standalone`
 - `JSFX_ASSETS`, files or directories to bundle beside the script
+- `COPY_PLUGIN_AFTER_BUILD`, optional JUCE copy-to-plugin-folder behavior
 
 Example with explicit metadata:
 
@@ -200,14 +202,14 @@ The runtime path forwards JUCE MIDI buffers into `ysfx`, receives MIDI output ba
 
 ## Runtime
 
-Always use the `ysfx` runtime for plugin work:
+`ysfx` is always required and always linked:
 
 ```bash
-cmake -S . -B build -G Ninja -DMRGEE_USE_YSFX=ON
+cmake -S . -B build -G Ninja
 cmake --build build
 ```
 
-The no-ysfx path exists only for this repo's internal smoke tests. Target plugin projects should assume `MRGEE_USE_YSFX=ON`.
+`mrgee-fx` does not support building without `ysfx`.
 
 ## What You Get First
 
@@ -255,27 +257,18 @@ For local development on this repo:
 
 ## Verifying This Repo
 
-No-ysfx checks:
+Run:
 
 ```bash
-cmake -S . -B build-check-off -G Ninja -DMRGEE_USE_YSFX=OFF
-cmake --build build-check-off
-./build-check-off/mrgee_jsfx_smoke_artefacts/mrgee_jsfx_smoke
-./build-check-off/mrgee_jsfx_asset_smoke_artefacts/mrgee_jsfx_asset_smoke
 cmake -S tests/external_consumer -B build-external-consumer -G Ninja
 cmake --build build-external-consumer
-```
-
-ysfx-enabled checks:
-
-```bash
-cmake -S . -B build-check-on -G Ninja -DMRGEE_USE_YSFX=ON
-cmake --build build-check-on
-./build-check-on/mrgee_jsfx_smoke_artefacts/RelWithDebInfo/mrgee_jsfx_smoke
-./build-check-on/mrgee_jsfx_asset_smoke_artefacts/RelWithDebInfo/mrgee_jsfx_asset_smoke
-./build-check-on/mrgee_midi_bridge_smoke_artefacts/RelWithDebInfo/mrgee_midi_bridge_smoke
-./build-check-on/mrgee_vst3_smoke_artefacts/RelWithDebInfo/mrgee_vst3_smoke \
-  "./build-check-on/MrgeeSwitchableFilter_artefacts/RelWithDebInfo/VST3/Mrgee Switchable Filter.vst3"
+cmake -S . -B build-check -G Ninja
+cmake --build build-check
+./build-check/mrgee_jsfx_smoke_artefacts/RelWithDebInfo/mrgee_jsfx_smoke
+./build-check/mrgee_jsfx_asset_smoke_artefacts/RelWithDebInfo/mrgee_jsfx_asset_smoke
+./build-check/mrgee_midi_bridge_smoke_artefacts/RelWithDebInfo/mrgee_midi_bridge_smoke
+./build-check/mrgee_vst3_smoke_artefacts/RelWithDebInfo/mrgee_vst3_smoke \
+  "./build-check/MrgeeSwitchableFilter_artefacts/RelWithDebInfo/VST3/Mrgee Switchable Filter.vst3"
 ```
 
 Or run:

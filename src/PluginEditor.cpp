@@ -2,8 +2,31 @@
 
 namespace
 {
-constexpr int kCardWidth = 210;
-constexpr int kCardHeight = 160;
+constexpr int kMinCardWidth = 164;
+constexpr int kCardHeight = 132;
+constexpr int kCardGap = 12;
+
+int getColumnCountForWidth(int width)
+{
+    const auto innerWidth = juce::jmax(1, width - 24);
+    return juce::jmax(1, (innerWidth + kCardGap) / (kMinCardWidth + kCardGap));
+}
+
+juce::Rectangle<int> getCardBounds(juce::Rectangle<int> area, int index)
+{
+    const auto columns = getColumnCountForWidth(area.getWidth() + 24);
+    const auto row = index / columns;
+    const auto column = index % columns;
+    const auto cardWidth = juce::jmax(kMinCardWidth,
+                                      (area.getWidth() - (columns - 1) * kCardGap) / columns);
+
+    return {
+        area.getX() + column * (cardWidth + kCardGap),
+        area.getY() + row * (kCardHeight + kCardGap),
+        cardWidth,
+        kCardHeight
+    };
+}
 }
 
 class MrgeeJsfxAudioProcessorEditor::ControlsComponent final : public juce::Component
@@ -67,31 +90,52 @@ public:
         }
     }
 
+    int getPreferredHeight(int width) const
+    {
+        const auto totalCards = static_cast<int>(labels.size());
+        if (totalCards <= 0)
+            return 80;
+
+        const auto columns = getColumnCountForWidth(width);
+        const auto rows = (totalCards + columns - 1) / columns;
+
+        return 24 + rows * kCardHeight + juce::jmax(0, rows - 1) * kCardGap;
+    }
+
+    void paint(juce::Graphics& g) override
+    {
+        auto area = getLocalBounds().reduced(12);
+        const auto totalCards = static_cast<int>(labels.size());
+
+        for (int index = 0; index < totalCards; ++index)
+        {
+            const auto bounds = getCardBounds(area, index).toFloat();
+            g.setColour(juce::Colours::white.withAlpha(0.055f));
+            g.fillRoundedRectangle(bounds, 7.0f);
+            g.setColour(juce::Colours::white.withAlpha(0.10f));
+            g.drawRoundedRectangle(bounds.reduced(0.5f), 7.0f, 1.0f);
+        }
+    }
+
     void resized() override
     {
         auto area = getLocalBounds().reduced(12);
         const auto totalCards = static_cast<int>(labels.size());
-        const auto columns = juce::jmax(1, area.getWidth() / (kCardWidth + 12));
 
         for (int index = 0; index < totalCards; ++index)
         {
-            const int row = index / columns;
-            const int column = index % columns;
-            auto bounds = juce::Rectangle<int>(
-                area.getX() + column * (kCardWidth + 12),
-                area.getY() + row * (kCardHeight + 12),
-                kCardWidth,
-                kCardHeight);
+            auto bounds = getCardBounds(area, index).reduced(10, 8);
 
             labels[static_cast<size_t>(index)]->setBounds(bounds.removeFromTop(26));
 
             if (sliders[static_cast<size_t>(index)] != nullptr)
             {
-                sliders[static_cast<size_t>(index)]->setBounds(bounds.reduced(6));
+                sliders[static_cast<size_t>(index)]->setBounds(bounds.reduced(4, 0));
             }
             else if (comboBoxes[static_cast<size_t>(index)] != nullptr)
             {
-                comboBoxes[static_cast<size_t>(index)]->setBounds(bounds.removeFromTop(34).reduced(10, 0));
+                bounds.removeFromTop(22);
+                comboBoxes[static_cast<size_t>(index)]->setBounds(bounds.removeFromTop(34).reduced(6, 0));
             }
         }
     }
@@ -107,8 +151,6 @@ private:
 MrgeeJsfxAudioProcessorEditor::MrgeeJsfxAudioProcessorEditor(MrgeeJsfxAudioProcessor& p)
     : AudioProcessorEditor(&p), audioProcessor(p)
 {
-    setSize(960, 620);
-
     titleLabel.setText(JucePlugin_Name, juce::dontSendNotification);
     titleLabel.setJustificationType(juce::Justification::centredLeft);
     titleLabel.setColour(juce::Label::textColourId, juce::Colours::white.withAlpha(0.96f));
@@ -125,10 +167,23 @@ MrgeeJsfxAudioProcessorEditor::MrgeeJsfxAudioProcessorEditor(MrgeeJsfxAudioProce
     addAndMakeVisible(statusLabel);
 
     controlsComponent = std::make_unique<ControlsComponent>(audioProcessor);
-    addAndMakeVisible(*controlsComponent);
+    controlsViewport.setScrollBarsShown(true, false);
+    controlsViewport.setViewedComponent(controlsComponent.get(), false);
+    controlsComponent->setVisible(true);
+    addAndMakeVisible(controlsViewport);
+
+    setResizable(true, true);
+    setResizeLimits(560, 420, 1800, 1400);
+    setSize(960, 620);
+    layoutControlsViewport();
 
     refreshStatus();
     startTimerHz(2);
+}
+
+MrgeeJsfxAudioProcessorEditor::~MrgeeJsfxAudioProcessorEditor()
+{
+    controlsViewport.setViewedComponent(nullptr, false);
 }
 
 void MrgeeJsfxAudioProcessorEditor::paint(juce::Graphics& g)
@@ -140,8 +195,7 @@ void MrgeeJsfxAudioProcessorEditor::paint(juce::Graphics& g)
     g.fillAll();
 
     g.setColour(juce::Colours::black.withAlpha(0.18f));
-    if (controlsComponent != nullptr)
-        g.fillRoundedRectangle(controlsComponent->getBounds().toFloat(), 18.0f);
+    g.fillRoundedRectangle(controlsViewport.getBounds().toFloat(), 8.0f);
 }
 
 void MrgeeJsfxAudioProcessorEditor::resized()
@@ -153,10 +207,23 @@ void MrgeeJsfxAudioProcessorEditor::resized()
     statusLabel.setBounds(area.removeFromTop(24));
     area.removeFromTop(12);
 
-    if (controlsComponent != nullptr)
-    {
-        controlsComponent->setBounds(area);
-    }
+    controlsViewport.setBounds(area);
+    layoutControlsViewport();
+}
+
+void MrgeeJsfxAudioProcessorEditor::layoutControlsViewport()
+{
+    if (controlsComponent == nullptr || controlsViewport.getWidth() <= 0 || controlsViewport.getHeight() <= 0)
+        return;
+
+    const auto scrollbarAllowance = controlsViewport.isVerticalScrollBarShown() ? 16 : 0;
+    const auto viewportWidth = juce::jmax(kMinCardWidth + 24, controlsViewport.getWidth() - scrollbarAllowance);
+    controlsComponent->setBounds(0,
+                                 0,
+                                 viewportWidth,
+                                 controlsComponent->getPreferredHeight(viewportWidth));
+    controlsComponent->resized();
+    controlsComponent->repaint();
 }
 
 void MrgeeJsfxAudioProcessorEditor::timerCallback()
@@ -166,5 +233,9 @@ void MrgeeJsfxAudioProcessorEditor::timerCallback()
 
 void MrgeeJsfxAudioProcessorEditor::refreshStatus()
 {
-    statusLabel.setText(audioProcessor.getStatusMessage(), juce::dontSendNotification);
+    statusLabel.setText(audioProcessor.getStatusMessage()
+                            + " "
+                            + juce::String(static_cast<int>(audioProcessor.getSliderDescriptors().size()))
+                            + " JSFX controls.",
+                        juce::dontSendNotification);
 }

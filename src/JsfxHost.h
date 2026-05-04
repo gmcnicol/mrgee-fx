@@ -29,6 +29,7 @@ public:
     void reset();
     void setSlider(int sliderIndex, float value);
     float getSlider(int sliderIndex) const;
+    float getRuntimeSlider(int sliderIndex) const;
     void process(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi);
 
     const std::vector<SliderDescriptor>& getSliderDescriptors() const noexcept { return sliderDescriptors; }
@@ -68,8 +69,6 @@ private:
     juce::String statusMessage;
     bool runtimeLoaded = false;
 
-   #if MRGEE_HAS_YSFX
     struct Runtime;
     std::unique_ptr<Runtime> runtime;
-   #endif
 };

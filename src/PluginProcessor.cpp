@@ -10,9 +10,15 @@ MrgeeJsfxAudioProcessor::MrgeeJsfxAudioProcessor()
                          .withOutput("Output", juce::AudioChannelSet::stereo(), true)
    #endif
       ),
-      apvts(*this, nullptr, "PARAMS", createParameterLayout(JsfxHost::loadBundledSliderDescriptors()))
+      apvts(*this,
+            nullptr,
+            "PARAMS",
+            [this]
+            {
+                jsfxHost.loadBundledScript();
+                return createParameterLayout(jsfxHost.getSliderDescriptors());
+            }())
 {
-    jsfxHost.loadBundledScript();
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout MrgeeJsfxAudioProcessor::createParameterLayout(
@@ -148,8 +154,8 @@ void MrgeeJsfxAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juc
     const auto& descriptors = jsfxHost.getSliderDescriptors();
     for (const auto& descriptor : descriptors)
     {
-        if (auto* parameter = apvts.getRawParameterValue(descriptor.paramId))
-            jsfxHost.setSlider(descriptor.index, parameter->load());
+        if (auto* parameter = apvts.getParameter(descriptor.paramId))
+            jsfxHost.setSlider(descriptor.index, parameter->convertFrom0to1(parameter->getValue()));
     }
 
     jsfxHost.process(buffer, midiMessages);
